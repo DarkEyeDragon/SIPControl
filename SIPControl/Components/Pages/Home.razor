@@ -1,0 +1,104 @@
+﻿@page "/"
+@using System.Collections.ObjectModel
+@using SIPControl.Models
+@using SIPControl.Shared
+@using SIPControl.Shared.Network
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime;
+@inject IDeviceStore Store
+
+@rendermode InteractiveServer
+
+
+<PageTitle>Home</PageTitle>
+
+<h1>SIP Control</h1>
+<Button Clicked="() => ScanAsync(_cts.Token)">Scan for devices</Button>
+<DataGrid TItem="PhoneDto"
+          Data="@_items"
+          Virtualize
+          Responsive>
+    <DataGridColumn Caption="Status" Width="40px">
+        <DisplayTemplate>
+            <Icon IconSize="IconSize.Large" TextColor="TextColor.Success" Name="IconName.CheckCircle"/>
+        </DisplayTemplate>
+    </DataGridColumn>
+    <DataGridColumn Field="@nameof(PhoneDto.Name)" Caption="Name" Editable="false"></DataGridColumn>
+    <DataGridColumn Field="@nameof(PhoneDto.IpAddress)" Caption="IP" Editable="false"></DataGridColumn>
+    <DataGridColumn Field="@nameof(PhoneDto.Version)" Caption="Version" Editable="false"></DataGridColumn>
+    <DataGridColumn Caption="Action">
+        <DisplayTemplate>
+            <a class="btn btn-primary" href="Edit/@context.Id">Edit</a>
+            <a class="btn btn-primary" href="https://@context.IpAddress" target="_blank">Got to device</a>
+        </DisplayTemplate>
+    </DataGridColumn>
+</DataGrid>
+
+@code{
+
+    private ObservableCollection<PhoneDto> _items = new ();
+    private CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Store.GetAllAsync();
+        foreach (var phoneDto in result)
+        {
+            _items.Add(phoneDto);
+        }
+        await base.OnInitializedAsync();
+    }
+
+    /*protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _cts = new CancellationTokenSource();
+            _ = LoadAsync(_cts.Token);
+        }
+
+        return Task.CompletedTask;
+    }*/
+
+    private async Task LoadAsync(CancellationToken ct)
+    {
+        await ScanAsync(ct);
+    }
+
+    private async Task ScanAsync(CancellationToken ct)
+    {
+        await foreach (var ip in NetworkManager.PingAliveHostsAsync("10.0.180", timeout: 200, maxConcurrent: 40, cancellationToken: ct))
+        {
+            if (_items.Any(x => x.IpAddress == ip)) continue;
+
+            try
+            {
+                var client = new PhoneClient(ip);
+                await client.LoginAsync("admin", "-snip-");
+                await client.PostLoginInfoAndCaptureCsrfAsync();
+                var data = (await client.GetGeneralStatus()).Data;
+                var accountInfo = await client.GetAccountInfoAsync();
+                
+                var dto = new PhoneDto {
+                    Id = accountInfo.Data[0].RegisterName,
+                    IpAddress = ip,
+                    Name = accountInfo.Data[0].Label,
+                    Version = data.SystemVersionHardware,
+                    DiscoveredAt = DateTimeOffset.UtcNow
+                };
+
+                _items.Add(dto);
+                await Store.UpsertAsync(dto);
+            }
+            catch { /* log if needed */ }
+        }
+    }
+
+    
+    private async Task NavigateTo(string url)
+    {
+        await JSRuntime.InvokeAsync
+            <object>("open", $"https://{url}", "_blank");
+    }
+
+}

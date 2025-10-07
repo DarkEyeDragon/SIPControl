@@ -1,0 +1,197 @@
+@page "/Edit/{Id}"
+@using SIPControl.Models
+@using SIPControl.Shared
+@using SIPControl.Shared.Data
+
+@inject IDeviceStore Store
+
+
+<h3>Edit</h3>
+<Row>
+    <Column ColumnSize="ColumnSize.Is1">
+        <p>Copy from </p>
+    </Column>
+    <Column ColumnSize="ColumnSize.Is3">
+        <Select TValue="PhoneDto" SelectedValue="_copyPhone" SelectedValueChanged="OnSelectedValueChanged">
+            @{
+                var result = _deviceList;
+                if (result is not null)
+                {
+                    foreach (var phoneDto in result)
+                    {
+                        <SelectItem TValue="PhoneDto" Value="phoneDto">@phoneDto.Name - @phoneDto.IpAddress</SelectItem>
+                    }
+                }
+            }
+        </Select>
+    </Column>
+    <Column ColumnSize="ColumnSize.Is1">
+        <Button Clicked="PasteConfig">Paste</Button>
+    </Column>
+</Row>
+
+
+@if (Extensions is null)
+{
+    <p>Loading data...</p>
+}
+else
+{
+    <Table Striped Responsive>
+        <TableHeader>
+            <TableRow>
+                <TableHeaderCell>Key</TableHeaderCell>
+                <TableHeaderCell>Type</TableHeaderCell>
+                <TableHeaderCell>Value</TableHeaderCell>
+                <TableHeaderCell>Label</TableHeaderCell>
+                <TableHeaderCell>Line</TableHeaderCell>
+                <TableHeaderCell>Extension</TableHeaderCell>
+            </TableRow>
+        </TableHeader>
+
+        <TableBody>
+            @foreach (var key in Extensions)
+            {
+                <TableRow>
+                    <!-- KeyName (editable) -->
+                    <TableRowCell>
+                        @key.KeyName
+                    </TableRowCell>
+
+                    <!-- Type (dropdown bound to key.Type) -->
+                    <TableRowCell>
+                        <Select TValue="string" @bind-SelectedValue="key.Type">
+                            @if (_keyTypes is not null)
+                            {
+                                @foreach (var type in _keyTypes)
+                                {
+                                    <SelectItem Value="@type.Value">@type.Name</SelectItem>
+                                }
+                            }
+                        </Select>
+                    </TableRowCell>
+
+                    <!-- Value -->
+                    <TableRowCell>
+                        <TextEdit @bind-Text="key.Value"/>
+                    </TableRowCell>
+
+                    <!-- Label -->
+                    <TableRowCell>
+                        <TextEdit @bind-Text="key.Label"/>
+                    </TableRowCell>
+
+                    <!-- LineIndex-->
+                    <TableRowCell>
+                        <Select TValue="string">
+                            @if (_keyTypes is not null)
+                            {
+                                @foreach (var type in _lineTypes)
+                                {
+                                    <SelectItem Value="@type">@type</SelectItem>
+                                }
+                            }
+                        </Select>
+                    </TableRowCell>
+
+                    <!-- ExtensionCode -->
+                    <TableRowCell>
+                        <TextEdit @bind-Text="key.ExtensionCode"/>
+                    </TableRowCell>
+                </TableRow>
+            }
+        </TableBody>
+    </Table>
+
+    <div class="mt-4">
+        <Button Color="Color.Primary" Clicked="OnSave">Save</Button>
+    </div>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = default!;
+
+    public List<ExtensionKeyDto>? Extensions { get; set; }
+
+    // Provided by your API: a list of available key types to populate the dropdown
+    private List<DssKeyType>? _keyTypes;
+    private List<Dictionary<string, string>>? _lineTypes;
+    private PhoneDto? _copyPhone;
+    private IReadOnlyCollection<PhoneDto>? _deviceList;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load device context
+        var dto = await Store.GetAsync(Id);
+
+        var phoneClient = new PhoneClient(dto.IpAddress);
+        await phoneClient.LoginAsync("admin", "-snip-");
+        await phoneClient.PostLoginInfoAndCaptureCsrfAsync();
+
+        var extensions = (await phoneClient.GetExtensionsAsync()).Data;
+
+        _keyTypes = extensions.DssKeyTypeList;
+        _lineTypes = extensions.LineList;
+
+        // Map incoming data to editable DTOs
+        var keys = extensions.DssKeyData.ExpKeys;
+        Extensions = keys
+            .Select(k => new ExtensionKeyDto
+            {
+                Index = k.Index,
+                KeyName = k.KeyName,
+                ExtensionCode = k.Extension,
+                LineIndex = k.Line,
+                Value = k.Value,
+                Label = k.KeyName,
+                Type = k.Type
+            })
+            .ToList();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await GetDeviceList();
+    }
+
+    private async Task GetDeviceList()
+    {
+        _deviceList ??= await Store.GetAllAsync();
+    }
+
+    private Task OnSave()
+    {
+        return Task.CompletedTask;
+    }
+
+    private async Task PasteConfig()
+    {
+        if (_copyPhone is null) return;
+        var phoneClient = new PhoneClient(_copyPhone.IpAddress);
+        await phoneClient.LoginAsync("admin", "-snip-");
+        await phoneClient.PostLoginInfoAndCaptureCsrfAsync();
+
+        var extensions = (await phoneClient.GetExtensionsAsync()).Data;
+
+        var keys = extensions.DssKeyData.ExpKeys;
+        Extensions = keys
+            .Select(k => new ExtensionKeyDto
+            {
+                Index = k.Index,
+                KeyName = k.KeyName,
+                ExtensionCode = k.Extension,
+                LineIndex = k.Line,
+                Value = k.Value,
+                Label = k.KeyName,
+                Type = k.Type
+            })
+            .ToList();
+        StateHasChanged();
+    }
+
+    private void OnSelectedValueChanged(PhoneDto obj)
+    {
+        _copyPhone = obj;
+    }
+
+}

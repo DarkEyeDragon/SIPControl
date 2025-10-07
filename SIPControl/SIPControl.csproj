@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Blazorise.Bootstrap5" Version="1.8.3" />
+      <PackageReference Include="Blazorise.Components" Version="1.8.3" />
+      <PackageReference Include="Blazorise.DataGrid" Version="1.8.3" />
+      <PackageReference Include="Blazorise.Icons.FontAwesome" Version="1.8.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SIPControl.Shared\SIPControl.Shared.csproj" />
+    </ItemGroup>
+
+</Project>
