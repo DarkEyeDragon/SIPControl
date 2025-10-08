@@ -6,6 +6,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime;
 @inject IDeviceStore Store
+@inject IPhoneClientFactory PhoneClientFactory
 
 @rendermode InteractiveServer
 
@@ -73,11 +74,10 @@
 
             try
             {
-                var client = new PhoneClient(ip);
-                await client.LoginAsync("admin", "-snip-");
-                await client.PostLoginInfoAndCaptureCsrfAsync();
-                var data = (await client.GetGeneralStatus()).Data;
-                var accountInfo = await client.GetAccountInfoAsync();
+                var phoneClient = await PhoneClientFactory.CreateAsync(ip);
+
+                var data = (await phoneClient.GetGeneralStatus()).Data;
+                var accountInfo = await phoneClient.GetAccountInfoAsync();
                 
                 var dto = new PhoneDto {
                     Id = accountInfo.Data[0].RegisterName,

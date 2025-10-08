@@ -3,6 +3,7 @@ using Blazorise.Bootstrap5;
 using Blazorise.Icons.FontAwesome;
 using SIPControl.Components;
 using SIPControl.Shared;
+using SIPControl.Shared.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,10 @@ builder.Services
     } )
     .AddBootstrap5Providers()
     .AddFontAwesomeIcons();
+
+builder.Services.Configure<LoginOptions>(builder.Configuration.GetSection("Login"));
+builder.Services.AddScoped<IPhoneClientFactory, PhoneClientFactory>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

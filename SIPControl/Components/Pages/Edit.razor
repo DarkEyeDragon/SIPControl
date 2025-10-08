@@ -4,7 +4,7 @@
 @using SIPControl.Shared.Data
 
 @inject IDeviceStore Store
-
+@inject IPhoneClientFactory PhoneClientFactory
 
 <h3>Edit</h3>
 <Row>
@@ -124,10 +124,7 @@ else
         // Load device context
         var dto = await Store.GetAsync(Id);
 
-        var phoneClient = new PhoneClient(dto.IpAddress);
-        await phoneClient.LoginAsync("admin", "-snip-");
-        await phoneClient.PostLoginInfoAndCaptureCsrfAsync();
-
+        var phoneClient = await PhoneClientFactory.CreateAsync(dto.IpAddress);
         var extensions = (await phoneClient.GetExtensionsAsync()).Data;
 
         _keyTypes = extensions.DssKeyTypeList;
@@ -167,9 +164,7 @@ else
     private async Task PasteConfig()
     {
         if (_copyPhone is null) return;
-        var phoneClient = new PhoneClient(_copyPhone.IpAddress);
-        await phoneClient.LoginAsync("admin", "-snip-");
-        await phoneClient.PostLoginInfoAndCaptureCsrfAsync();
+        var phoneClient = await PhoneClientFactory.CreateAsync(_copyPhone.IpAddress);
 
         var extensions = (await phoneClient.GetExtensionsAsync()).Data;
 
