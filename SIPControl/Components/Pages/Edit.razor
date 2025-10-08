@@ -12,14 +12,15 @@
         <p>Copy from </p>
     </Column>
     <Column ColumnSize="ColumnSize.Is3">
-        <Select TValue="PhoneDto" SelectedValue="_copyPhone" SelectedValueChanged="OnSelectedValueChanged">
+        <Select TValue="string" @bind-SelectedValue="_copyPhoneIp">
             @{
                 var result = _deviceList;
                 if (result is not null)
                 {
                     foreach (var phoneDto in result)
                     {
-                        <SelectItem TValue="PhoneDto" Value="phoneDto">@phoneDto.Name - @phoneDto.IpAddress</SelectItem>
+                        <SelectItem TValue="string"
+                                    Value="phoneDto.IpAddress">@phoneDto.Name - @phoneDto.IpAddress</SelectItem>
                     }
                 }
             }
@@ -65,7 +66,7 @@ else
                             {
                                 @foreach (var type in _keyTypes)
                                 {
-                                    <SelectItem Value="@type.Value">@type.Name</SelectItem>
+                                    <SelectItem Value="@type.Id">@type.Name</SelectItem>
                                 }
                             }
                         </Select>
@@ -83,12 +84,14 @@ else
 
                     <!-- LineIndex-->
                     <TableRowCell>
-                        <Select TValue="string">
+                        <Select TValue="string" @bind-SelectedValue="@key.LineIndex">
                             @if (_keyTypes is not null)
                             {
-                                @foreach (var type in _lineTypes)
+                                @for (var index = 0; index < _lineTypes.Count; index++)
                                 {
-                                    <SelectItem Value="@type">@type</SelectItem>
+                                    var type = _lineTypes[index];
+                                    var value = type[index.ToString()];
+                                    <SelectItem Value="@index.ToString()">@value</SelectItem>
                                 }
                             }
                         </Select>
@@ -111,27 +114,31 @@ else
 @code {
     [Parameter] public string Id { get; set; } = default!;
 
+    private Dictionary<int, ExpKey> _originalByIndex = new();
     public List<ExtensionKeyDto>? Extensions { get; set; }
 
     // Provided by your API: a list of available key types to populate the dropdown
     private List<DssKeyType>? _keyTypes;
     private List<Dictionary<string, string>>? _lineTypes;
-    private PhoneDto? _copyPhone;
+    private string? _copyPhoneIp;
     private IReadOnlyCollection<PhoneDto>? _deviceList;
+
+    private PhoneClient _phoneClient;
+
 
     protected override async Task OnInitializedAsync()
     {
         // Load device context
         var dto = await Store.GetAsync(Id);
 
-        var phoneClient = await PhoneClientFactory.CreateAsync(dto.IpAddress);
-        var extensions = (await phoneClient.GetExtensionsAsync()).Data;
+        _phoneClient = await PhoneClientFactory.CreateAsync(dto.IpAddress);
+        var extensions = (await _phoneClient.GetExtensionsAsync()).Data;
 
         _keyTypes = extensions.DssKeyTypeList;
         _lineTypes = extensions.LineList;
 
-        // Map incoming data to editable DTOs
         var keys = extensions.DssKeyData.ExpKeys;
+        _originalByIndex = keys.ToDictionary(k => k.Index);
         Extensions = keys
             .Select(k => new ExtensionKeyDto
             {
@@ -140,7 +147,7 @@ else
                 ExtensionCode = k.Extension,
                 LineIndex = k.Line,
                 Value = k.Value,
-                Label = k.KeyName,
+                Label = k.Label,
                 Type = k.Type
             })
             .ToList();
@@ -156,15 +163,18 @@ else
         _deviceList ??= await Store.GetAllAsync();
     }
 
-    private Task OnSave()
+    private async Task OnSave()
     {
-        return Task.CompletedTask;
+        //var copyPhone = await PhoneClientFactory.CreateAsync(_copyPhoneIp);
+        if (Extensions is null) return;
+        var payload = Extensions.Select(ToExpKey).ToList();
+        await _phoneClient.PostConfigUpdate(payload);
     }
 
     private async Task PasteConfig()
     {
-        if (_copyPhone is null) return;
-        var phoneClient = await PhoneClientFactory.CreateAsync(_copyPhone.IpAddress);
+        if (_copyPhoneIp is null) return;
+        var phoneClient = await PhoneClientFactory.CreateAsync(_copyPhoneIp);
 
         var extensions = (await phoneClient.GetExtensionsAsync()).Data;
 
@@ -177,16 +187,27 @@ else
                 ExtensionCode = k.Extension,
                 LineIndex = k.Line,
                 Value = k.Value,
-                Label = k.KeyName,
+                Label = k.Label,
                 Type = k.Type
             })
             .ToList();
         StateHasChanged();
     }
 
-    private void OnSelectedValueChanged(PhoneDto obj)
+    private ExpKey ToExpKey(ExtensionKeyDto d)
     {
-        _copyPhone = obj;
-    }
+        var orig = _originalByIndex[d.Index];
 
+        return new ExpKey
+        {
+            Index = orig.Index,
+            Id = orig.Id,
+            KeyName = d.KeyName.Trim(),
+            Type = d.Type.Trim(),
+            Line = d.LineIndex.Trim(),
+            Value = d.Value.Trim(),
+            Extension = d.ExtensionCode.Trim(),
+            Label = d.Label.Trim()
+        };
+    }
 }
