@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
 
-namespace SIPControl.Shared.Data;
+namespace SIPControl.Shared.Data.Yealink;
 
-public class LoginResponse
+public class IsTalkingResponse
 {
     [JsonPropertyName("ret")] public string Ret { get; set; }
 

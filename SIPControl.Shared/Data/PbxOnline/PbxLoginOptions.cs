@@ -1,6 +1,6 @@
-namespace SIPControl.Shared.Data;
+namespace SIPControl.Shared.Data.PbxOnline;
 
-public class LoginOptions
+public class PbxLoginOptions
 {
     public string Username { get; set; }
     public string Password { get; set; }

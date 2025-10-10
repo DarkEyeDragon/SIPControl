@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using SIPControl.Shared.Data;
+using SIPControl.Shared.Data.Yealink;
 
 namespace SIPControl.Shared
 {

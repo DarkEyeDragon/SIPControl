@@ -4,6 +4,8 @@ using Blazorise.Icons.FontAwesome;
 using SIPControl.Components;
 using SIPControl.Shared;
 using SIPControl.Shared.Data;
+using SIPControl.Shared.Data.PbxOnline;
+using SIPControl.Shared.Data.Yealink;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,7 +22,9 @@ builder.Services
     .AddFontAwesomeIcons();
 
 builder.Services.Configure<LoginOptions>(builder.Configuration.GetSection("Login"));
+builder.Services.Configure<PbxLoginOptions>(builder.Configuration.GetSection("PbxLogin"));
 builder.Services.AddScoped<IPhoneClientFactory, PhoneClientFactory>();
+builder.Services.AddScoped<IPbxOnlineFactory, PbxOnlineFactory>();
 
 var app = builder.Build();
 

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SIPControl.Shared.Data;
+namespace SIPControl.Shared.Data.Yealink;
 
 public class GeneralInfoResponse
 {

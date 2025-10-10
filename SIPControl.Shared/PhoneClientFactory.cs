@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using SIPControl.Shared.Data;
+using SIPControl.Shared.Data.Yealink;
 
 namespace SIPControl.Shared;
 

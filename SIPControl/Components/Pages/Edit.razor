@@ -1,10 +1,14 @@
 @page "/Edit/{Id}"
+@using Blazorise.DeepCloner
 @using SIPControl.Models
 @using SIPControl.Shared
-@using SIPControl.Shared.Data
+@using SIPControl.Shared.Data.PbxOnline
+@using SIPControl.Shared.Data.Yealink
 
 @inject IDeviceStore Store
 @inject IPhoneClientFactory PhoneClientFactory
+@inject IPbxOnlineFactory PbxOnlineFactory
+@inject IJSRuntime JS
 
 <h3>Edit</h3>
 <Row>
@@ -26,8 +30,9 @@
             }
         </Select>
     </Column>
-    <Column ColumnSize="ColumnSize.Is1">
-        <Button Clicked="PasteConfig">Paste</Button>
+    <Column ColumnSize="ColumnSize.Is2">
+        <Button Class="btn-primary" Clicked="PasteConfig">Paste</Button>
+        <Button Class="btn-primary" Clicked="OrderByName">Order by Name</Button>
     </Column>
 </Row>
 
@@ -41,6 +46,7 @@ else
     <Table Striped Responsive>
         <TableHeader>
             <TableRow>
+                <TableHeaderCell></TableHeaderCell>
                 <TableHeaderCell>Key</TableHeaderCell>
                 <TableHeaderCell>Type</TableHeaderCell>
                 <TableHeaderCell>Value</TableHeaderCell>
@@ -50,18 +56,27 @@ else
             </TableRow>
         </TableHeader>
 
-        <TableBody>
+        <TableBody id="ext-body">
             @foreach (var key in Extensions)
             {
-                <TableRow>
-                    <!-- KeyName (editable) -->
-                    <TableRowCell>
-                        @key.KeyName
+                var index = key.Index;
+                //TODO Properly handle row reassignment
+                <TableRow Draggable data-id="@index" @key="index"
+                          DragStart="@(() => OnDragStart(index))" Drop="@((args) => OnDrop())"
+                          DragOver="@(args => OnDragOver(index))"
+                          DragPreventDefault
+                          DragEnterPreventDefault
+                          DragOverPreventDefault
+                          DropPreventDefault>
+                    <TableRowCell style="width:2rem" class="cursor-move">
+                        <Icon IconStyle="IconStyle.Solid" Name="IconName.List"/>
                     </TableRowCell>
 
-                    <!-- Type (dropdown bound to key.Type) -->
+                    <TableRowCell>@key.KeyName</TableRowCell>
+
                     <TableRowCell>
-                        <Select TValue="string" @bind-SelectedValue="key.Type">
+                        <Select TValue="string"
+                                SelectedValue="@key.Type">
                             @if (_keyTypes is not null)
                             {
                                 @foreach (var type in _keyTypes)
@@ -72,39 +87,56 @@ else
                         </Select>
                     </TableRowCell>
 
-                    <!-- Value -->
                     <TableRowCell>
-                        <TextEdit @bind-Text="key.Value"/>
-                    </TableRowCell>
-
-                    <!-- Label -->
-                    <TableRowCell>
-                        <TextEdit @bind-Text="key.Label"/>
-                    </TableRowCell>
-
-                    <!-- LineIndex-->
-                    <TableRowCell>
-                        <Select TValue="string" @bind-SelectedValue="@key.LineIndex">
-                            @if (_keyTypes is not null)
-                            {
-                                @for (var index = 0; index < _lineTypes.Count; index++)
+                        @if (_extensionsLoading)
+                        {
+                            <span>Loading…</span>
+                        }
+                        else
+                        {
+                            <Select TValue="string" @bind-SelectedValue="key.Value" Disabled="@(!key.CanEditValue)">
+                                @foreach (var r in _extensions)
                                 {
-                                    var type = _lineTypes[index];
-                                    var value = type[index.ToString()];
-                                    <SelectItem Value="@index.ToString()">@value</SelectItem>
+                                    <SelectItem Value="@r.BlfExtension">
+                                        @($"{r.BlfExtension} - {r.AttachInfo?.LogicalName}")
+                                    </SelectItem>
+                                }
+                            </Select>
+                        }
+                    </TableRowCell>
+
+                    <TableRowCell>
+                        <TextEdit Disabled="@(!key.CanEditLabel)" @bind-Text="key.Label"/>
+                    </TableRowCell>
+
+                    <TableRowCell>
+                        <Select TValue="string" @bind-SelectedValue="key.LineIndex">
+                            @if (_lineTypes is not null && _lineTypes.Count > 0)
+                            {
+                                var dict = _lineTypes[0];
+                                foreach (var kv in dict)
+                                {
+                                    <SelectItem Value="@kv.Key">@kv.Value</SelectItem>
+                                    ;
                                 }
                             }
                         </Select>
                     </TableRowCell>
 
-                    <!-- ExtensionCode -->
                     <TableRowCell>
-                        <TextEdit @bind-Text="key.ExtensionCode"/>
+                        <TextEdit Disabled="@(!key.CanEditExtension)" @bind-Text="key.ExtensionCode"/>
                     </TableRowCell>
                 </TableRow>
+                @if (_insertIndex == index + 1)
+                {
+                    <TableRow Class="drop-placeholder">
+                        <TableRowCell ColSpan="7"></TableRowCell>
+                    </TableRow>
+                }
             }
         </TableBody>
     </Table>
+
 
     <div class="mt-4">
         <Button Color="Color.Primary" Clicked="OnSave">Save</Button>
@@ -124,10 +156,15 @@ else
     private IReadOnlyCollection<PhoneDto>? _deviceList;
 
     private PhoneClient _phoneClient;
+    private PbxOnline _pbxOnline;
 
+    private bool _extensionsLoading = true;
+    private List<PbxExtensionResponse.Result> _extensions = new();
 
+    
     protected override async Task OnInitializedAsync()
     {
+        _pbxOnline = await PbxOnlineFactory.CreateAsync();
         // Load device context
         var dto = await Store.GetAsync(Id);
 
@@ -140,15 +177,22 @@ else
         var keys = extensions.DssKeyData.ExpKeys;
         _originalByIndex = keys.ToDictionary(k => k.Index);
         Extensions = keys
-            .Select(k => new ExtensionKeyDto
+            .Select(k =>
             {
-                Index = k.Index,
-                KeyName = k.KeyName,
-                ExtensionCode = k.Extension,
-                LineIndex = k.Line,
-                Value = k.Value,
-                Label = k.Label,
-                Type = k.Type
+                var type = _keyTypes[int.Parse(k.Type)];
+                return new ExtensionKeyDto
+                {
+                    Index = k.Index,
+                    KeyName = k.KeyName,
+                    ExtensionCode = k.Extension,
+                    LineIndex = k.Line,
+                    Value = k.Value,
+                    Label = k.Label,
+                    Type = k.Type,
+                    CanEditExtension = type.Extension,
+                    CanEditLabel = type.Label,
+                    CanEditValue = type.Value
+                };
             })
             .ToList();
     }
@@ -156,6 +200,7 @@ else
     protected override async Task OnParametersSetAsync()
     {
         await GetDeviceList();
+        await LoadExtensionsAsync();
     }
 
     private async Task GetDeviceList()
@@ -209,5 +254,155 @@ else
             Extension = d.ExtensionCode.Trim(),
             Label = d.Label.Trim()
         };
+    }
+
+    private async Task LoadExtensionsAsync()
+    {
+        _extensionsLoading = true;
+        try
+        {
+            var resp = await _pbxOnline.GetExtensions();
+            _extensions = resp.Results ?? new();
+        }
+        finally
+        {
+            _extensionsLoading = false;
+        }
+    }
+
+    private void OrderByName()
+    {
+        if (Extensions is null) return;
+
+        // Work on a clone if you need to avoid mutating the original references
+        var list = Extensions.DeepClone().ToList();
+
+        // Define what "empty" means — adjust if needed
+        bool IsEmpty(ExtensionKeyDto x) => string.IsNullOrWhiteSpace(x.Label);
+
+        // Partition
+        var nonEmpty = list.Where(x => !IsEmpty(x))
+            .OrderBy(x => x.Label, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var empties = list.Where(IsEmpty).ToList();
+
+        // Combine: sorted non-empty first, then empties
+        var ordered = nonEmpty.Concat(empties).ToList();
+
+        // Reindex and rename
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var item = ordered[i];
+            item.Index = i + 1;
+            item.KeyName = $"Key{i + 1}";
+        }
+
+        Extensions = ordered;
+        StateHasChanged();
+    }
+
+    private Task OnItemsChanged(IEnumerable<ExtensionKeyDto> newOrder)
+    {
+        Extensions = newOrder.ToList();
+
+        // Reindex & rename to your convention
+        for (var i = 0; i < Extensions.Count; i++)
+        {
+            Extensions[i].Index = i + 1; // you used 1-based earlier
+            Extensions[i].KeyName = $"Key{i + 1}";
+        }
+
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private int? _dragIndex;
+    private int? _insertIndex;
+
+    private void OnDragStart(int index)
+    {
+        _dragIndex = index;
+        _insertIndex = index;
+        StateHasChanged();
+    }
+    private void OnDragOver(int overIndex)
+    {
+        if (_dragIndex is null || Extensions is null) return;
+
+        var from = _dragIndex.Value;
+        // If dragging down, placeholder goes AFTER hovered row; if up, BEFORE it
+        _insertIndex = overIndex > from ? overIndex + 1 : overIndex;
+        StateHasChanged();
+    }
+
+    /*private void OnDrop(int index)
+    {
+        var targetIndex = index;
+        if (_dragIndex is null || Extensions is null)
+            return;
+
+        var from = _dragIndex.Value;
+        if (from == targetIndex)
+            return;
+
+        // Move the item
+        var item = Extensions[from];
+        Extensions.RemoveAt(from);
+
+        // If removing from above, target shifts by -1
+        if (from < targetIndex) targetIndex--;
+
+        Extensions.Insert(targetIndex, item);
+
+        // Reindex & rename to your convention
+        for (var i = 0; i < Extensions.Count; i++)
+        {
+            Extensions[i].Index = i + 1; // you used 1-based elsewhere
+            Extensions[i].KeyName = $"Key{i + 1}";
+        }
+
+        _dragIndex = null;
+        StateHasChanged();
+    }*/
+
+    private void OnDrop()
+    {
+        if (_dragIndex is null || _insertIndex is null || Extensions is null) return;
+
+        var from = _dragIndex.Value;
+        var to = _insertIndex.Value;
+
+        // No-op if same slot (including dropping right back)
+        if (to == from || to == from + 1)
+        {
+            _dragIndex = null;
+            _insertIndex = null;
+            StateHasChanged();
+            return;
+        }
+
+        var item = Extensions[from];
+        Extensions.RemoveAt(from);
+
+        // After removal, indices shift if moving down
+        if (from < to) to--;
+
+        // Clamp
+        if (to < 0) to = 0;
+        if (to > Extensions.Count) to = Extensions.Count;
+
+        Extensions.Insert(to, item);
+
+        // Reindex & rename to your convention
+        for (var i = 0; i < Extensions.Count; i++)
+        {
+            Extensions[i].Index = i + 1;         // you used 1-based Index elsewhere
+            Extensions[i].KeyName = $"Key{i + 1}";
+        }
+
+        _dragIndex = null;
+        _insertIndex = null;
+        StateHasChanged();
     }
 }

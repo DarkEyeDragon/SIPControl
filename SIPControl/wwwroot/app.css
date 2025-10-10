@@ -58,3 +58,12 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+.cursor-move { cursor: move; }
+tr.dragging { opacity: .6; }
+
+.drop-placeholder td, .drop-placeholder .b-table-row-cell {
+    height: 40px;             /* tweak to match your row height */
+    border: 2px dashed #b6c1d2;
+    background: #f2f6ff;
+    padding: 0 !important;
+}

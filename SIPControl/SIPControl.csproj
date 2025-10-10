@@ -11,17 +11,25 @@
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>
+      <Content Update="Components\Pages\Edit.razor.js">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="Blazorise.Bootstrap5" Version="1.8.3" />
-      <PackageReference Include="Blazorise.Components" Version="1.8.3" />
+      <PackageReference Include="Blazorise.Components" Version="1.8.4" />
       <PackageReference Include="Blazorise.DataGrid" Version="1.8.3" />
       <PackageReference Include="Blazorise.Icons.FontAwesome" Version="1.8.3" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\SIPControl.Shared\SIPControl.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Components\Components\" />
     </ItemGroup>
 
 </Project>
